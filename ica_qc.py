@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MEGnet ICA Quality Control Tool
+ICA Quality Control Tool
 
 Author: Amit Jaiswal, Megin Oy, Espoo, Finland
 Email : amit.jaiswal@megin.fi
 
-This script is meant to check the quality of ICA applied through MEGnet and 
+This script is meant to check the quality of ICA and 
        override the ICA application with user's own selections.
 USAGE:
     - Check ICA outputs:
-        python megnet_qc_plots.py --results_dir <directory>
+        python ica_qc.py --results_dir <directory>
     - Apply ICA manually:
-        python megnet_qc_plots.py --ica_file <xxx_0-ica_applied.fif> \
-                                  --data_file <xxx_raw_tsss.fif> \
-                                  --apply_filter --block --apply_ica
+        python ica_qc.py --ica_file <xxx_0-ica_applied.fif> \
+            --data_file <xxx_raw_tsss.fif> \
+                --apply_filter --block --apply_ica
     - Help:
-        python megnet_qc_plots.py --help
+        python ica_qc.py --help
 """
 import os
 import argparse
@@ -65,49 +65,45 @@ def apply_filters(raw, lfreq, hfreq):
     raw.filter(l_freq=lfreq, h_freq=hfreq, **filter_params)
     return raw
 
-def write_explained_variance(ica, raw, save_path):
+def write_explained_variance(ica, raw, report_ctx):
     print("Writing explained variance ratio...")
     exp_var = ica.get_explained_variance_ratio(raw)
-    sensors = raw.get_channel_types()
-    filename = os.path.join(save_path, "Explained_variance_ratio.csv")
-    with open(filename, 'w') as fid:
-        if 'grad' not in sensors:
-            fid.write("data_file, \tmag\n")
-            fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('mag', 'NA')}")
-        elif 'mag' not in sensors:
-            fid.write("data_file, \tgrad\n")
-            fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('grad', 'NA')}")
-        else:
-            fid.write("data_file, \tgrad, \tmag\n")
-            fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('grad', 'NA')}, \t{exp_var.get('mag', 'NA')}")
+    # sensors = raw.get_channel_types()
+    code_str = ''
+    for key in ['grad', 'mag', 'eeg']:
+        if key in list(exp_var.keys()):
+            code_str += f'{key.upper().ljust(4)} : {exp_var[key]:.2f}\n'
+    report_ctx['object'].add_html(f'<pre>{code_str}</pre>', 
+                    title='Explained variance ratio', 
+                    tags=('ica',), replace=True)  
+    del code_str
+    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+    
+    # filename = os.path.join(save_path, "Explained_variance_ratio.csv")
+    # with open(filename, 'w') as fid:
+    #     if 'grad' not in sensors:
+    #         fid.write("data_file, \tmag\n")
+    #         fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('mag', 'NA')}")
+    #     elif 'mag' not in sensors:
+    #         fid.write("data_file, \tgrad\n")
+    #         fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('grad', 'NA')}")
+    #     else:
+    #         fid.write("data_file, \tgrad, \tmag\n")
+    #         fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('grad', 'NA')}, \t{exp_var.get('mag', 'NA')}") 
+    
+    # #% %
+    # thisCfg = dict(section=args2.raw_fname.split('/')[-1].replace('.fif', ''), replace=True)
+    # code_str = ''
+    # for key in list(args2.__dict__.keys()):
+    #     code_str += f'{key.ljust(12)} : {args2.__dict__[key]}\n'
+    # report.add_html(f'<pre>{code_str}</pre>', 
+    #                 title='Processing parameters', 
+    #                 tags=('parameters',), **thisCfg);   del code_str
 
 def create_report(report_file, title):
     from mne import Report
     os.makedirs(os.path.dirname(report_file), exist_ok=True)
     return Report(title=title, verbose=None)
-
-# def generate_plots(raw, ica, qc_dir, report_ctx, figwidth, block):
-#     print("Generating ICA plots...")
-
-#     # Plot ICA components
-#     plot_ica_components(raw, ica, qc_dir, report_ctx, figwidth)
-
-#     # Plot ICA source projections
-#     plot_ica_sources(raw, ica, qc_dir, report_ctx, figwidth)
-
-#     # Plot EOG/ECG scores
-#     plot_scores(raw, ica, qc_dir, report_ctx)
-
-#     # Overlay raw and cleaned
-#     plot_overlay(raw, ica, qc_dir, report_ctx, figwidth)
-
-#     # PSDs
-#     plot_psd(raw, qc_dir, report_ctx, figwidth)
-
-#     if block:
-#         plt.show()
-#     else:
-#         plt.close('all')
 
 def get_ica_ts_raw(ica, raw):
     ica_ts    = ica.get_sources(raw, add_channels=None, start=None, stop=None)
@@ -121,22 +117,21 @@ def get_ica_ts_raw(ica, raw):
     ica_ts.info['bads'] = [ica_ts.ch_names[ii] for ii in ica.exclude]
     return ica_ts
 
-def plot_ica_components(raw, ica, qc_dir, report_ctx, figwidth):
+def plot_ica_components(ica, report_ctx, figwidth=15):
     fig = ica.plot_components(title=f'Removed ICs indices: {ica.exclude}', show=False,
                                     picks=range(ica.n_components_), ncols=6)
     fig.set_figwidth(figwidth)
-    if report_ctx:
-        report_ctx['ifig'] += 1
-        report_ctx['object'].add_figure(
-            fig, title='ICA components field-maps', section='All components', 
-            caption=f"Fig. {report_ctx['ifig']}. Field maps for all ICA components", 
-            **report_ctx['add_cfg'])
-        report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    else:
-        plt.show(block=False);   plt.pause(0.001)
-        fig.savefig(f'{qc_dir}/all_component_topomaps.png', dpi='figure', format='png')
+    report_ctx['ifig'] += 1
+    report_ctx['object'].add_figure(
+        fig, title='ICA components field-maps', section='All components', 
+        caption=f"Fig. {report_ctx['ifig']}. Field maps for all ICA components", 
+        **report_ctx['add_cfg'])
+    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+    # if not report_ctx['reports_only']:
+    #     plt.show(block=False);   plt.pause(0.001)
+    #     fig.savefig(f'{qc_dir}/all_component_topomaps.png', dpi='figure', format='png')
 
-def plot_ica_psds(raw, ica, qc_dir, report_ctx, figwidth):
+def plot_ica_psds(raw, ica, report_ctx, figwidth=15):
     ica_ts = get_ica_ts_raw(ica, raw)
     ica_psds, ica_freqs = psd_array_multitaper(
                             mne.make_fixed_length_epochs(ica_ts, duration=25).get_data(), 
@@ -145,7 +140,7 @@ def plot_ica_psds(raw, ica, qc_dir, report_ctx, figwidth):
     if len(ica_psds.shape) > 2: ica_psds = ica_psds.mean(0)
     ica_idx   = [i for i, item in enumerate(ica_ts.get_channel_types()) if item=='misc']
     eocmg_idx = [i for i, item in enumerate(ica_ts.get_channel_types()) if item!='misc']
-    fig, ax   = plt.subplots(2,1, sharex=True, figsize=(figwidth, 6))
+    fig, ax   = plt.subplots(2,1, sharex=True, figsize=(figwidth, 10))
     for ii, idxs in enumerate([ica_idx, eocmg_idx]):
         ax[ii].plot(ica_freqs, ica_psds[idxs,:].T, 
                     label=[ica_ts.ch_names[i] for i in idxs])
@@ -154,18 +149,17 @@ def plot_ica_psds(raw, ica, qc_dir, report_ctx, figwidth):
         ax[ii].grid()
     ax[ii].set_xlabel('Frequency')
     fig.tight_layout()  
-    if report_ctx:
-        report_ctx['ifig'] += 1
-        report_ctx['object'].add_figure(
-            fig, title='Components spectra', section='All components', 
-            caption=f"Fig. {report_ctx['ifig']}. Power spectra of ICA components.", 
-            **report_ctx['add_cfg'])
-        report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    else:
-        fig.savefig(f'{qc_dir}/all_component_psds.png', dpi='figure', format='png')
-        plt.close()
+    report_ctx['ifig'] += 1
+    report_ctx['object'].add_figure(
+        fig, title='Components spectra', section='All components', 
+        caption=f"Fig. {report_ctx['ifig']}. Power spectra of ICA components.", 
+        **report_ctx['add_cfg'])
+    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+    # if not report_ctx['reports_only']:
+    #     fig.savefig(f'{qc_dir}/all_component_psds.png', dpi='figure', format='png')
+    #     plt.close()
 
-def plot_scores(raw, ica, qc_dir, report_ctx):
+def plot_ica_scores(raw, ica, qc_dir, report_ctx):
     fig = ica.plot_scores(show=False)
     fig_path = os.path.join(qc_dir, "ICA_scores.png")
     fig.savefig(fig_path, dpi=150)
@@ -174,7 +168,7 @@ def plot_scores(raw, ica, qc_dir, report_ctx):
     if report_ctx:
         report_ctx['object'].add_figs_to_section(fig=fig, captions="ICA Scores", **report_ctx['add_cfg'])
         
-def plot_ica_sources(raw, ica, qc_dir, report_ctx, figwidth, block=True):
+def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
     ica_ts = get_ica_ts_raw(ica, raw)
     # fig    = ica.plot_sources(raw, picks=range(ica.n_components_), show=False, 
     #                           block=False, start=0, stop=10)
@@ -185,35 +179,33 @@ def plot_ica_sources(raw, ica, qc_dir, report_ctx, figwidth, block=True):
                 scalings = dict(eog=100e-6, ecg=4e-4, 
                                 emg=1e-3, ref_meg=1e-12, misc=1e+1) )
     fig.set_figwidth(figwidth)
-    if report_ctx:
-        report_ctx['ifig'] += 1
-        report_ctx['object'].add_figure(
-            fig, title='ICA components time-courses', section='All components', 
-            caption=f"Fig. {report_ctx['ifig']}. Time courses for all ICA components", 
-            **report_ctx['add_cfg'])
-        report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    else:
-        plt.show(block=False);   plt.pause(0.001)
-        fig.savefig(f'{qc_dir}/all_component_time_series.png', dpi='figure', format='png')
+    report_ctx['ifig'] += 1
+    report_ctx['object'].add_figure(
+        fig, title='ICA components time-courses', section='All components', 
+        caption=f"Fig. {report_ctx['ifig']}. Time courses for all ICA components", 
+        **report_ctx['add_cfg'])
+    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+    # if not report_ctx['reports_only']:
+    #     plt.show(block=False);   plt.pause(0.001)
+    #     fig.savefig(f'{qc_dir}/all_component_time_series.png', dpi='figure', format='png')
     return ica_ts
 
-def plot_ica_properties(raw, ica, qc_dir, report_ctx, figwidth, block=True):
+def plot_ica_properties(raw, ica, report_ctx, figwidth, block=True):
     figs = ica.plot_properties(raw.copy().pick(['meg', 'eeg', 'eog', 'ecg']),
                                picks=range(ica.n_components_), show=False)
     for ii, fig in enumerate(figs):
-        if report_ctx:
-            report_ctx['ifig'] += 1
-            fig.set_figwidth(figwidth)
-            report_ctx['object'].add_figure(
-                fig, title=f'IC{str(ii).zfill(3)}', 
-                section='Component-wise properties', 
-                caption=f"Fig. {report_ctx['ifig'] }. "
-                "ICA component IC{str(ii).zfill(3)} properties.",
-                **report_ctx['add_cfg'])
-            report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-        else:
-            fig.savefig(f'{qc_dir}/IC{str(ii).zfill(3)}_properties.png', dpi='figure', format='png')
-            plt.close()
+        report_ctx['ifig'] += 1
+        fig.set_figwidth(figwidth)
+        report_ctx['object'].add_figure(
+            fig, title=f'IC{str(ii).zfill(3)}', 
+            section='Component-wise properties', 
+            caption=f"Fig. {report_ctx['ifig'] }. "
+            "ICA component IC{str(ii).zfill(3)} properties.",
+            **report_ctx['add_cfg'])
+        report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+        # if not report_ctx['reports_only']:
+        #     fig.savefig(f'{qc_dir}/IC{str(ii).zfill(3)}_properties.png', dpi='figure', format='png')
+        #     plt.close()
 
 def plot_overlay(raw, ica, qc_dir, report_ctx, figwidth):
     raw_cleaned = raw.copy()
@@ -227,13 +219,21 @@ def plot_overlay(raw, ica, qc_dir, report_ctx, figwidth):
     fig.savefig(fig_path, dpi=150)
     fig_cleaned.savefig(fig_cleaned_path, dpi=150)
     print(f"Saved: {fig_path}, {fig_cleaned_path}")
-
     if report_ctx:
-        report_ctx['object'].add_figs_to_section(fig=fig, captions="Original Raw", **report_ctx['add_cfg'])
-        report_ctx['object'].add_figs_to_section(fig=fig_cleaned, captions="ICA Cleaned Raw", **report_ctx['add_cfg'])
+        report_ctx['object'].add_figs_to_section(fig=fig, 
+                                                 captions="Original Raw", 
+                                                 **report_ctx['add_cfg'])
+        report_ctx['object'].add_figs_to_section(fig=fig_cleaned, 
+                                                 captions="ICA Cleaned Raw", 
+                                                 **report_ctx['add_cfg'])
+
+def plot_artifact_scores():
+    
+    return None
+
 
 @verbose
-def plot_all(results_dir=None, ica_file=None, data_file=None, report_file=None,
+def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, report_only=True,
              apply_filter=False, lfreq=None, hfreq=None, block=False, apply_ica=False,
              figwidth=15, verbose=None):
 
@@ -253,30 +253,35 @@ def plot_all(results_dir=None, ica_file=None, data_file=None, report_file=None,
         hfreq = hfreq or raw.info['lowpass']
         raw = apply_filters(raw, lfreq, hfreq)
 
-    qc_dir = os.path.join(os.path.dirname(ica_file), "MEGnetQCplots", os.path.basename(data_file)[:-4])
+    qc_dir = os.path.join(os.path.dirname(ica_file), "ICA_QC", os.path.basename(data_file)[:-4])
     os.makedirs(qc_dir, exist_ok=True)
     print(f"Saving report/plots to: {qc_dir}")
 
-    write_explained_variance(ica, raw, qc_dir)
+    report_file = os.path.join(qc_dir, "ICA_QC_report.html")
+    report = create_report(report_file, f"ICA QC Report: {os.path.basename(ica_file)}")
+    report_context = {
+        'file': report_file,
+        'object': report,
+        'ifig': 0,
+        'save_cfg': dict(open_browser=False, overwrite=True, sort_content=False, verbose=None),
+        'add_cfg': dict(tags=('ica',), image_format='png', replace=True),
+        'reports_only': report_only
+    }
+    
+    write_explained_variance(ica, raw, report_context)
 
-    if report_file is not False:
-        report_file = report_file or os.path.join(qc_dir, "MEGNET_QC_report.html")
-        report = create_report(report_file, f"MEGNET QC Report: {os.path.basename(ica_file)}")
-        report_context = {
-            'file': report_file,
-            'object': report,
-            'ifig': 0,
-            'save_cfg': dict(open_browser=False, overwrite=True, sort_content=False, verbose=None),
-            'add_cfg': dict(tags=('ica',), image_format='png', replace=True)
-        }
-    else:
-        report_context = None
-
-    # Now modularize plotting calls
-    # generate_plots(raw, ica, qc_dir, report_context, figwidth, block)
-    plot_ica_components(raw, ica, qc_dir, report_context, figwidth) 
-    plot_ica_psds(raw, ica, qc_dir, report_context, figwidth) 
-    plot_ica_sources(raw, ica, qc_dir, report_context, figwidth, block=block)
+    plot_ica_components(ica, report_context, figwidth)
+    
+    plot_ica_psds(raw, ica, report_context, figwidth) 
+    
+    plot_ica_sources(raw, ica, report_context, figwidth, block=block)
+    
+    plot_ica_properties(raw, ica, report_context, figwidth)
+    
+    plot_artifact_scores(raw, ica, qc_dir, report_context, figwidth)
+    
+    plot_overlay(raw, ica, qc_dir, report_context, figwidth)
+    
 
     if apply_ica:
         print("Applying ICA manually...")
@@ -290,18 +295,12 @@ def plot_all(results_dir=None, ica_file=None, data_file=None, report_file=None,
         report_context['object'].save(fname=report_context['file'], **report_context['save_cfg'])
         print(f"QC report saved at: {report_context['file']}")
 
-# def generate_plots(raw, ica, qc_dir, report_context, figwidth, block):
-#     # This function can be further split (e.g., for each plot type)
-#     # For now, keep it monolithic and insert all plot sections here
-#     # You already have logic for components, psds, time-courses, scores, etc.
-#     pass  # Put your existing plotting blocks here
-
 def parse_args():
-    parser = argparse.ArgumentParser(description='Post-ICA QC visualization tool for MEGnet outputs.')
-    parser.add_argument('--results_dir',  '-dir', type=str, help='Path to MEGnet results.')
+    parser = argparse.ArgumentParser(description='Post-ICA QC visualization tool for MEGnet (or other ICA pipelines) outputs.')
+    parser.add_argument('--results_dir',  '-dir', type=str, help='Path to MEGnet (or other ICA pipelines) results.')
     parser.add_argument('--ica_file',     '-ica', default=None, type=str, help='Path to ICA-applied file.')
     parser.add_argument('--data_file',    '-data', default=None, type=str, help='Raw MEG file.')
-    parser.add_argument('--report_file',  '-report', default=None, type=str, help='HTML report path. False to disable.')
+    # parser.add_argument('--report_file',  '-report', default=None, type=str, help='HTML report path. False to disable.')
     parser.add_argument('--apply_filter', action='store_true', help='Apply bandpass filter before plotting.')
     parser.add_argument('--lfreq',        type=float, help='Low cutoff for bandpass filter.')
     parser.add_argument('--hfreq',        type=float, help='High cutoff for bandpass filter.')
@@ -314,4 +313,4 @@ if __name__ == '__main__':
     args = parse_args()
     #%%
     args.results_dir = '/home/amit3/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/'
-    plot_all(**vars(args))
+    plot_ica_qc(**vars(args))
