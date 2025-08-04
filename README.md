@@ -2,7 +2,7 @@
 
 Post-ICA QC visualization and manual correction tool.
 
-![Digitization Example](https://drive.google.com/file/d/12s07KanvY8q5eREnhUfnwK7Be9M4qn0n/view?usp=sharing)
+![Digitization Example](utils/images/img01.png)
 
 ## Get help
 ```
