@@ -78,27 +78,6 @@ def write_explained_variance(ica, raw, report_ctx):
                     tags=('ica',), replace=True)  
     del code_str
     report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    
-    # filename = os.path.join(save_path, "Explained_variance_ratio.csv")
-    # with open(filename, 'w') as fid:
-    #     if 'grad' not in sensors:
-    #         fid.write("data_file, \tmag\n")
-    #         fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('mag', 'NA')}")
-    #     elif 'mag' not in sensors:
-    #         fid.write("data_file, \tgrad\n")
-    #         fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('grad', 'NA')}")
-    #     else:
-    #         fid.write("data_file, \tgrad, \tmag\n")
-    #         fid.write(f"{os.path.basename(raw.filenames[0])}, \t{exp_var.get('grad', 'NA')}, \t{exp_var.get('mag', 'NA')}") 
-    
-    # #% %
-    # thisCfg = dict(section=args2.raw_fname.split('/')[-1].replace('.fif', ''), replace=True)
-    # code_str = ''
-    # for key in list(args2.__dict__.keys()):
-    #     code_str += f'{key.ljust(12)} : {args2.__dict__[key]}\n'
-    # report.add_html(f'<pre>{code_str}</pre>', 
-    #                 title='Processing parameters', 
-    #                 tags=('parameters',), **thisCfg);   del code_str
 
 def create_report(report_file, title):
     from mne import Report
@@ -118,18 +97,17 @@ def get_ica_ts_raw(ica, raw):
     return ica_ts
 
 def plot_ica_components(ica, report_ctx, figwidth=15):
-    fig = ica.plot_components(title=f'Removed ICs indices: {ica.exclude}', show=False,
-                                    picks=range(ica.n_components_), ncols=6)
-    fig.set_figwidth(figwidth)
-    report_ctx['ifig'] += 1
-    report_ctx['object'].add_figure(
-        fig, title='ICA components field-maps', section='All components', 
-        caption=f"Fig. {report_ctx['ifig']}. Field maps for all ICA components", 
-        **report_ctx['add_cfg'])
-    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    # if not report_ctx['reports_only']:
-    #     plt.show(block=False);   plt.pause(0.001)
-    #     fig.savefig(f'{qc_dir}/all_component_topomaps.png', dpi='figure', format='png')
+    picks = np.unique(ica.get_channel_types()).tolist()
+    for pick in picks:
+        fig = ica.plot_components(title=f'Removed ICs indices: {ica.exclude}', show=False,
+                                        picks=range(ica.n_components_), ncols=6)
+        fig.set_figwidth(figwidth)
+        report_ctx['ifig'] += 1
+        report_ctx['object'].add_figure(
+            fig, title=f'ICA components field-maps (for {pick.upper()}s)', section='All components', 
+            caption=f"Fig. {report_ctx['ifig']}. Field maps for all ICA components using ({pick.upper()}s)", 
+            **report_ctx['add_cfg'])
+        report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
 
 def plot_ica_psds(raw, ica, report_ctx, figwidth=15):
     ica_ts = get_ica_ts_raw(ica, raw)
@@ -155,9 +133,6 @@ def plot_ica_psds(raw, ica, report_ctx, figwidth=15):
         caption=f"Fig. {report_ctx['ifig']}. Power spectra of ICA components.", 
         **report_ctx['add_cfg'])
     report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    # if not report_ctx['reports_only']:
-    #     fig.savefig(f'{qc_dir}/all_component_psds.png', dpi='figure', format='png')
-    #     plt.close()
 
 def plot_ica_scores(raw, ica, qc_dir, report_ctx):
     fig = ica.plot_scores(show=False)
@@ -203,9 +178,6 @@ def plot_ica_properties(raw, ica, report_ctx, figwidth, block=True):
             "ICA component IC{str(ii).zfill(3)} properties.",
             **report_ctx['add_cfg'])
         report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-        # if not report_ctx['reports_only']:
-        #     fig.savefig(f'{qc_dir}/IC{str(ii).zfill(3)}_properties.png', dpi='figure', format='png')
-        #     plt.close()
 
 def plot_overlay(raw, ica, qc_dir, report_ctx, figwidth):
     raw_cleaned = raw.copy()
