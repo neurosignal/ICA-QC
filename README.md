@@ -39,3 +39,9 @@ optional arguments:
   --block               Block GUI for plots.
 
 ```
+
+## Contribution
+Contributions are most welcome! Please open issues or submit pull requests.
+
+## License
+See `LICENSE` for details.
