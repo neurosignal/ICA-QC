@@ -1,8 +1,16 @@
 # ICA-QC
 
-Post-ICA QC visualization and manual correction tool.
+**Post-ICA QC visualization and manual correction tool.
 
 ![Digitization Example](utils/images/img01.png)
+---
+
+##  Features
+
+- Visualize the results of Independent Component Analysis (ICA) for MEG/EEG preprocessing.
+- Perform manual quality checks and override ICA-derived components as needed.
+- Optionally re-apply ICA on the data.
+---
 
 ## Get help
 ```
@@ -39,6 +47,8 @@ optional arguments:
   --block               Block GUI for plots.
 
 ```
+## Use cases
+- Check 
 
 ## Contribution
 Contributions are most welcome! Please open an issue or submit a pull request.
