@@ -19,6 +19,16 @@ Post-ICA QC visualization and manual correction tool.
 - Matplotlib
 ---
 
+##  Installation
+
+Clone this repository:
+
+```bash
+git clone https://github.com/neurosignal/ICA-QC.git
+cd ICA-QC
+```
+---
+
 ## Get help
 ```
 python ica_qc.py --help
