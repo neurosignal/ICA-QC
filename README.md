@@ -64,8 +64,30 @@ optional arguments:
   --block               Block GUI for plots.
 
 ```
-## Use cases
-- Check 
+---
+
+## Common workflows
+- Visualize precomputed ICA results (e.g., from MEGnet or another ICA pipeline in MNE-Python):
+```
+python ica_qc.py --results_dir <path/to/results_directory>
+```
+- Apply ICA Manually
+```
+python ica_qc.py \
+  --ica_file <path/to/xxx_0-ica_applied.fif> \
+  --data_file <path/to/xxx_raw_tsss.fif> \
+  --apply_filter \
+  --lfreq <low_freq_cutoff> \
+  --hfreq <high_freq_cutoff> \
+  --apply_ica \
+  --block
+```
+- --apply_filter, --lfreq, --hfreq: add a band-pass filter before visualization.
+
+- --apply_ica: apply ICA to raw data.
+
+- --block: block execution until the GUI window is closed after selection/de-selection.
+---
 
 ## Contribution
 Contributions are most welcome! Please open an issue or submit a pull request.
