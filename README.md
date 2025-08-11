@@ -41,7 +41,7 @@ optional arguments:
 ```
 
 ## Contribution
-Contributions are most welcome! Please open issues or submit pull requests.
+Contributions are most welcome! Please open an issue or submit a pull request.
 
 ## License
 See `LICENSE` for details.

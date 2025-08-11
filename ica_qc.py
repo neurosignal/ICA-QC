@@ -12,9 +12,7 @@ USAGE:
     - Check ICA outputs:
         python ica_qc.py --results_dir <directory>
     - Apply ICA manually:
-        python ica_qc.py --ica_file <xxx_0-ica_applied.fif> \
-            --data_file <xxx_raw_tsss.fif> \
-                --apply_filter --block --apply_ica
+        python ica_qc.py --ica_file <xxx_0-ica_applied.fif> --data_file <xxx_raw_tsss.fif> --apply_filter --block --apply_ica
     - Help:
         python ica_qc.py --help
 """
@@ -28,6 +26,8 @@ from time import sleep
 from mne.utils import verbose
 from multiprocessing import cpu_count
 from mne.time_frequency import psd_array_multitaper
+from copy import deepcopy
+from datetime import datetime
 
 plt.rcParams.update({
     "font.size": 12,
@@ -100,11 +100,13 @@ def plot_ica_components(ica, report_ctx, figwidth=15):
     picks = np.unique(ica.get_channel_types()).tolist()
     for pick in picks:
         fig = ica.plot_components(title=f'Removed ICs indices: {ica.exclude}', show=False,
-                                        picks=range(ica.n_components_), ncols=6)
+                                        picks=range(ica.n_components_), ncols=6, cnorm=None,
+                                        ch_type=pick, image_args=None, psd_args=None, verbose=None)
         fig.set_figwidth(figwidth)
         report_ctx['ifig'] += 1
         report_ctx['object'].add_figure(
-            fig, title=f'ICA components field-maps (for {pick.upper()}s)', section='All components', 
+            fig, title=f'ICA components field-maps (for {pick.upper()}s)', 
+            # section='All components', 
             caption=f"Fig. {report_ctx['ifig']}. Field maps for all ICA components using ({pick.upper()}s)", 
             **report_ctx['add_cfg'])
         report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
@@ -129,7 +131,8 @@ def plot_ica_psds(raw, ica, report_ctx, figwidth=15):
     fig.tight_layout()  
     report_ctx['ifig'] += 1
     report_ctx['object'].add_figure(
-        fig, title='Components spectra', section='All components', 
+        fig, title='Components spectra', 
+        # section='All components', 
         caption=f"Fig. {report_ctx['ifig']}. Power spectra of ICA components.", 
         **report_ctx['add_cfg'])
     report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
@@ -143,28 +146,6 @@ def plot_ica_scores(raw, ica, qc_dir, report_ctx):
     if report_ctx:
         report_ctx['object'].add_figs_to_section(fig=fig, captions="ICA Scores", **report_ctx['add_cfg'])
         
-def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
-    ica_ts = get_ica_ts_raw(ica, raw)
-    # fig    = ica.plot_sources(raw, picks=range(ica.n_components_), show=False, 
-    #                           block=False, start=0, stop=10)
-    fig = ica_ts.plot(duration=10.0, n_channels=len(ica_ts.ch_names), order=None, 
-                show=True, block=block, verbose=None,
-                color=dict(eog='b', ecg='m', emg='c', 
-                           ref_meg='steelblue', misc='k'), 
-                scalings = dict(eog=100e-6, ecg=4e-4, 
-                                emg=1e-3, ref_meg=1e-12, misc=1e+1) )
-    fig.set_figwidth(figwidth)
-    report_ctx['ifig'] += 1
-    report_ctx['object'].add_figure(
-        fig, title='ICA components time-courses', section='All components', 
-        caption=f"Fig. {report_ctx['ifig']}. Time courses for all ICA components", 
-        **report_ctx['add_cfg'])
-    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
-    # if not report_ctx['reports_only']:
-    #     plt.show(block=False);   plt.pause(0.001)
-    #     fig.savefig(f'{qc_dir}/all_component_time_series.png', dpi='figure', format='png')
-    return ica_ts
-
 def plot_ica_properties(raw, ica, report_ctx, figwidth, block=True):
     figs = ica.plot_properties(raw.copy().pick(['meg', 'eeg', 'eog', 'ecg']),
                                picks=range(ica.n_components_), show=False)
@@ -182,36 +163,90 @@ def plot_ica_properties(raw, ica, report_ctx, figwidth, block=True):
 def plot_overlay(raw, ica, qc_dir, report_ctx, figwidth):
     raw_cleaned = raw.copy()
     ica.apply(raw_cleaned, verbose='error')
-
-    fig = raw.plot(duration=10.0, n_channels=30, show=False)
-    fig_cleaned = raw_cleaned.plot(duration=10.0, n_channels=30, show=False)
-
-    fig_path = os.path.join(qc_dir, "Raw_overlay.png")
-    fig_cleaned_path = os.path.join(qc_dir, "Raw_cleaned_overlay.png")
-    fig.savefig(fig_path, dpi=150)
-    fig_cleaned.savefig(fig_cleaned_path, dpi=150)
-    print(f"Saved: {fig_path}, {fig_cleaned_path}")
+    figs = {}
+    figs['Original data'] = raw.plot(duration=10.0, n_channels=30, show=False)
+    figs['Clean data'] = raw_cleaned.plot(duration=10.0, n_channels=30, show=False)
+    for chs in ['grad', 'mag', 'eeg']:
+        if chs in np.unique(raw.get_channel_types()).tolist():
+            figs[f'Overlap {chs.upper()}'] = ica.plot_overlay(raw, picks=chs, 
+                                                              show=False)
     if report_ctx:
-        report_ctx['object'].add_figs_to_section(fig=fig, 
-                                                 captions="Original Raw", 
-                                                 **report_ctx['add_cfg'])
-        report_ctx['object'].add_figs_to_section(fig=fig_cleaned, 
-                                                 captions="ICA Cleaned Raw", 
-                                                 **report_ctx['add_cfg'])
+        for key in list(figs.keys()):
+            fig = figs[key]
+            fig.set_figwidth(figwidth)
+            report_ctx['object'].add_figure(fig, title=key, 
+                section='Overlap plots (before vs. after)', 
+                caption=f"Plot for {key}.", **report_ctx['add_cfg'])
 
-def plot_artifact_scores():
+def plot_artifact_scores(raw, ica, report_ctx, figwidth):
+    for artif in ['ecg', 'eog', 'muscle']:
+        try:
+            idx, scores = eval(f'ica.find_bads_{artif}(raw)')
+            fig = ica.plot_scores(scores, n_cols=None, show=False, 
+                                  title=f'{artif.upper()} artifact scores ({idx})')
+            fig.set_figwidth(figwidth)
+            fig.set_figheight(8 if len(fig.axes)>2 else 5)
+            if report_ctx:
+                report_ctx['object'].add_figure(
+                    fig, title=f'{artif.upper()} artifact scores ({idx})', 
+                    caption=f'{artif.upper()} artifact scores ({idx})', 
+                    section='Artifact scores', **report_ctx['add_cfg'])
+        except ValueError:
+            None
+    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+
+def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
+    ica = deepcopy(ica)
+    if block: plt.close('all')
+    ica_ts = get_ica_ts_raw(ica, raw)
+    # fig    = ica.plot_sources(raw, picks=range(ica.n_components_), show=False, 
+    #                           block=False, start=0, stop=10)
+    exc_before =  [ica._ica_names[i] for i in ica.exclude]
+    fig = ica_ts.plot(duration=10.0, n_channels=len(ica_ts.ch_names), order=None, 
+                show=True, block=block, verbose=None,
+                color=dict(eog='b', ecg='m', emg='c', 
+                           ref_meg='steelblue', misc='k'), 
+                scalings = dict(eog=100e-6, ecg=4e-4, 
+                                emg=1e-3, ref_meg=1e-12, misc=1e+1) )
+    if block:
+        if not (ica_ts.info['bads'] == [ica._ica_names[i] for i in ica.exclude]):
+            ica.exclude = [ica._ica_names.index(ch) for ch in ica_ts.info['bads']]
+            date_str    = datetime.now().strftime("-%Y%m%d-%H%M%S")
+            new_ica_file = report_ctx['ica_file'].replace('.fif', date_str + '.fif')
+            ica.save(new_ica_file)
+            exc_after =  [ica._ica_names[i] for i in ica.exclude]
+            strA = f' | \t\nNew ica solution saved: {new_ica_file}'
+    else:
+        exc_after = exc_before
+        strA = ''
+            
+    fig.set_figwidth(figwidth)
+    report_ctx['ifig'] += 1
+    strB = f' | \tExclued before: {exc_before} \tExclued after: {exc_after}'
+    strC = f"Fig. {report_ctx['ifig']}. Time courses for all ICA components"
+    report_ctx['object'].add_figure(
+        fig, title='ICA components time-courses', 
+        # section='All components', 
+        caption=strC + strB + strA, 
+        **report_ctx['add_cfg'])
     
-    return None
-
+    report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
+    return ica_ts
 
 @verbose
-def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, report_only=True,
-             apply_filter=False, lfreq=None, hfreq=None, block=False, apply_ica=False,
-             figwidth=15, verbose=None):
+def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, 
+                apply_filter=False, lfreq=None, hfreq=None, block=False, 
+                apply_ica=False, figwidth=15, verbose=None):
 
-    if results_dir or not all([ica_file, data_file]):
+    if results_dir and not ica_file and not data_file:
         print("Searching for ICA and data files...")
         data_file, ica_file = find_files(results_dir)
+    elif results_dir and ica_file and not data_file:
+        print("Searching for data file...")
+        data_file, _ = find_files(results_dir)
+    elif results_dir and not ica_file and data_file:
+        print("Searching for ICA solution...")
+        _, ica_file = find_files(results_dir)
 
     raw = mne.io.read_raw_fif(data_file, allow_maxshield=True, preload=True)
     ica = mne.preprocessing.read_ica(ica_file)
@@ -232,12 +267,13 @@ def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, report_only=Tru
     report_file = os.path.join(qc_dir, "ICA_QC_report.html")
     report = create_report(report_file, f"ICA QC Report: {os.path.basename(ica_file)}")
     report_context = {
-        'file': report_file,
-        'object': report,
-        'ifig': 0,
-        'save_cfg': dict(open_browser=False, overwrite=True, sort_content=False, verbose=None),
-        'add_cfg': dict(tags=('ica',), image_format='png', replace=True),
-        'reports_only': report_only
+        'data_file': data_file,
+        'ica_file' : ica_file,
+        'file'     : report_file,
+        'object'   : report,
+        'ifig'     : 0,
+        'save_cfg' : dict(open_browser=False, overwrite=True, sort_content=False, verbose=None),
+        'add_cfg'  : dict(tags=('ica',), image_format='png', replace=True)
     }
     
     write_explained_variance(ica, raw, report_context)
@@ -245,16 +281,15 @@ def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, report_only=Tru
     plot_ica_components(ica, report_context, figwidth)
     
     plot_ica_psds(raw, ica, report_context, figwidth) 
-    
-    plot_ica_sources(raw, ica, report_context, figwidth, block=block)
-    
+        
     plot_ica_properties(raw, ica, report_context, figwidth)
     
-    plot_artifact_scores(raw, ica, qc_dir, report_context, figwidth)
+    plot_artifact_scores(raw, ica, report_context, figwidth)
     
     plot_overlay(raw, ica, qc_dir, report_context, figwidth)
     
-
+    plot_ica_sources(raw, ica, report_context, figwidth, block=block)   
+    
     if apply_ica:
         print("Applying ICA manually...")
         raw = mne.io.read_raw_fif(data_file, allow_maxshield=True, preload=True)
@@ -264,6 +299,7 @@ def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, report_only=Tru
         print(f"ICA applied and saved to: {output_path}")
 
     if report_context:
+        report_context['save_cfg']['open_browser'] = True
         report_context['object'].save(fname=report_context['file'], **report_context['save_cfg'])
         print(f"QC report saved at: {report_context['file']}")
 
@@ -272,7 +308,7 @@ def parse_args():
     parser.add_argument('--results_dir',  '-dir', type=str, help='Path to MEGnet (or other ICA pipelines) results.')
     parser.add_argument('--ica_file',     '-ica', default=None, type=str, help='Path to ICA-applied file.')
     parser.add_argument('--data_file',    '-data', default=None, type=str, help='Raw MEG file.')
-    # parser.add_argument('--report_file',  '-report', default=None, type=str, help='HTML report path. False to disable.')
+    parser.add_argument('--new_ica_file', '-nica', default=None, type=str, help='ICA file name if to be written.')
     parser.add_argument('--apply_filter', action='store_true', help='Apply bandpass filter before plotting.')
     parser.add_argument('--lfreq',        type=float, help='Low cutoff for bandpass filter.')
     parser.add_argument('--hfreq',        type=float, help='High cutoff for bandpass filter.')
@@ -283,6 +319,8 @@ def parse_args():
 if __name__ == '__main__':
     plt.ioff()
     args = parse_args()
-    #%%
-    args.results_dir = '/home/amit3/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/'
+    # args.results_dir = '~/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/'
+    # args.block = True
+    # args.ica_file = '~/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/1329323_M2B_5minOD_raw_tsss_0-ica_applied-20250811-170305.fif'
     plot_ica_qc(**vars(args))
+    plt.close('all')
