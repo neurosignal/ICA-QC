@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from glob import glob
 from time import sleep
 from mne.utils import verbose
-from multiprocessing import cpu_count
+from os import cpu_count
 from mne.time_frequency import psd_array_multitaper
 from copy import deepcopy
 from datetime import datetime
