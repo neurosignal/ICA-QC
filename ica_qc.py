@@ -68,7 +68,6 @@ def apply_filters(raw, lfreq, hfreq):
 def write_explained_variance(ica, raw, report_ctx):
     print("Writing explained variance ratio...")
     exp_var = ica.get_explained_variance_ratio(raw)
-    # sensors = raw.get_channel_types()
     code_str = ''
     for key in ['grad', 'mag', 'eeg']:
         if key in list(exp_var.keys()):
@@ -186,6 +185,12 @@ def plot_artifact_scores(raw, ica, report_ctx, figwidth):
                                   title=f'{artif.upper()} artifact scores ({idx})')
             fig.set_figwidth(figwidth)
             fig.set_figheight(8 if len(fig.axes)>2 else 5)
+            scores = [scores] if isinstance(scores, np.ndarray) else scores
+            for ii in range(len(scores)):
+                ax = fig.axes[ii]
+                bars = ax.patches
+                for i in idx:
+                    bars[i].set_linewidth(4)
             if report_ctx:
                 report_ctx['object'].add_figure(
                     fig, title=f'{artif.upper()} artifact scores ({idx})', 
@@ -199,8 +204,6 @@ def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
     ica = deepcopy(ica)
     if block: plt.close('all')
     ica_ts = get_ica_ts_raw(ica, raw)
-    # fig    = ica.plot_sources(raw, picks=range(ica.n_components_), show=False, 
-    #                           block=False, start=0, stop=10)
     exc_before =  [ica._ica_names[i] for i in ica.exclude]
     fig = ica_ts.plot(duration=10.0, n_channels=len(ica_ts.ch_names), order=None, 
                 show=True, block=block, verbose=None,
@@ -212,14 +215,15 @@ def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
         if not (ica_ts.info['bads'] == [ica._ica_names[i] for i in ica.exclude]):
             ica.exclude = [ica._ica_names.index(ch) for ch in ica_ts.info['bads']]
             date_str    = datetime.now().strftime("-%Y%m%d-%H%M%S")
-            new_ica_file = report_ctx['ica_file'].replace('.fif', date_str + '.fif')
+            if report_ctx['new_ica_file'] is None:
+                new_ica_file = report_ctx['ica_file'].replace('.fif', date_str + '.fif')
+            else:
+                new_ica_file = report_ctx['new_ica_file']
             ica.save(new_ica_file)
             exc_after =  [ica._ica_names[i] for i in ica.exclude]
             strA = f' | \t\nNew ica solution saved: {new_ica_file}'
     else:
-        exc_after = exc_before
-        strA = ''
-            
+        exc_after, strA = exc_before, ''
     fig.set_figwidth(figwidth)
     report_ctx['ifig'] += 1
     strB = f' | \tExclued before: {exc_before} \tExclued after: {exc_after}'
@@ -229,12 +233,11 @@ def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
         # section='All components', 
         caption=strC + strB + strA, 
         **report_ctx['add_cfg'])
-    
     report_ctx['object'].save(fname=report_ctx['file'], **report_ctx['save_cfg'])
     return ica_ts
 
 @verbose
-def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, 
+def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, new_ica_file=None,
                 apply_filter=False, lfreq=None, hfreq=None, block=False, 
                 apply_ica=False, figwidth=15, verbose=None):
 
@@ -267,13 +270,14 @@ def plot_ica_qc(results_dir=None, ica_file=None, data_file=None,
     report_file = os.path.join(qc_dir, "ICA_QC_report.html")
     report = create_report(report_file, f"ICA QC Report: {os.path.basename(ica_file)}")
     report_context = {
-        'data_file': data_file,
-        'ica_file' : ica_file,
-        'file'     : report_file,
-        'object'   : report,
-        'ifig'     : 0,
-        'save_cfg' : dict(open_browser=False, overwrite=True, sort_content=False, verbose=None),
-        'add_cfg'  : dict(tags=('ica',), image_format='png', replace=True)
+        'data_file'   : data_file,
+        'ica_file'    : ica_file,
+        'new_ica_file': new_ica_file,
+        'file'        : report_file,
+        'object'  : report,
+        'ifig'    : 0,
+        'save_cfg': dict(open_browser=False, overwrite=True, sort_content=False, verbose=None),
+        'add_cfg' : dict(tags=('ica',), image_format='png', replace=True)
     }
     
     write_explained_variance(ica, raw, report_context)
@@ -319,8 +323,9 @@ def parse_args():
 if __name__ == '__main__':
     plt.ioff()
     args = parse_args()
-    # args.results_dir = '~/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/'
+    #% %
+    # args.results_dir = '/home/amit3/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/'
     # args.block = True
-    # args.ica_file = '~/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/1329323_M2B_5minOD_raw_tsss_0-ica_applied-20250811-170305.fif'
+    # args.ica_file = '/home/amit3/pCloudDrive/DATA/Oncology/VUMc/datasel/ica_tmp_di2/1329323_M2B_5minOD_raw_tsss/1329323_M2B_5minOD_raw_tsss_0-ica_applied-20250811-170305.fif'
     plot_ica_qc(**vars(args))
     plt.close('all')
