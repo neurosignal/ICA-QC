@@ -1,6 +1,6 @@
 # ICA-QC
 
-**Post-ICA QC visualization and manual correction tool.
+Post-ICA QC visualization and manual correction tool.
 
 ![Digitization Example](utils/images/img01.png)
 ---
@@ -10,6 +10,13 @@
 - Visualize the results of Independent Component Analysis (ICA) for MEG/EEG preprocessing.
 - Perform manual quality checks and override ICA-derived components as needed.
 - Optionally re-apply ICA on the data.
+---
+
+##  Requirements
+
+- MNE-python (1.3.0 and above)
+- Numpy
+- Matplotlib
 ---
 
 ## Get help
