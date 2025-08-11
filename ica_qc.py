@@ -205,6 +205,12 @@ def plot_ica_sources(raw, ica, report_ctx, figwidth=15, block=True):
     if block: plt.close('all')
     ica_ts = get_ica_ts_raw(ica, raw)
     exc_before =  [ica._ica_names[i] for i in ica.exclude]
+    if block:
+        save_cfg_tmp = report_ctx['save_cfg']
+        save_cfg_tmp['open_browser'] = True
+        report_ctx['object'].save(fname=report_ctx['file'], **save_cfg_tmp)
+        sleep(1)
+        print('Reject/de-reject components...')
     fig = ica_ts.plot(duration=10.0, n_channels=len(ica_ts.ch_names), order=None, 
                 show=True, block=block, verbose=None,
                 color=dict(eog='b', ecg='m', emg='c', 
@@ -298,9 +304,11 @@ def plot_ica_qc(results_dir=None, ica_file=None, data_file=None, new_ica_file=No
         print("Applying ICA manually...")
         raw = mne.io.read_raw_fif(data_file, allow_maxshield=True, preload=True)
         ica.apply(raw)
-        output_path = data_file.replace(os.path.dirname(data_file), os.path.dirname(ica_file)).replace('.fif', '_ICAmanual.fif')
+        output_path = data_file.replace(os.path.dirname(data_file), 
+                                        os.path.dirname(ica_file)).replace('.fif', 
+                                                                           '_ICAmanual.fif')
         raw.save(output_path, overwrite=True, verbose=None)
-        print(f"ICA applied and saved to: {output_path}")
+        print(f"\nNew ICA-applied data saved to: {output_path}")
 
     if report_context:
         report_context['save_cfg']['open_browser'] = True
